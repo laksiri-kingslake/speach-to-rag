@@ -1,0 +1,7 @@
+gradio 
+transformers 
+pandasai 
+langchain-groq 
+mysql-connector-python 
+torch
+tabulate
