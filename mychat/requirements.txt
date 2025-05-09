@@ -5,3 +5,4 @@ langchain-groq
 mysql-connector-python 
 torch
 tabulate
+langchain_openai
