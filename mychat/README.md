@@ -1,4 +1,4 @@
-# Speach to RAG - My Chat
+# Speech to RAG - My Chat
 
 ## Instructions
 

@@ -9,12 +9,19 @@ import mysql.connector
 # Initialize components
 llm = ChatGroq(model_name="llama3-70b-8192", api_key=os.environ["GROQ_API_KEY"])
 speech_pipe = pipeline("automatic-speech-recognition", "openai/whisper-base")
+emotion_pipe = pipeline("text-classification", 
+                       model="joeddav/distilbert-base-uncased-go-emotions-student")
 
 def process_query(message, history):
+    # Detect emotion before processing query
     if isinstance(message, dict):  # Audio input
         audio_path = message["mic"]
         message = speech_pipe(audio_path)["text"]
     
+    # Emotion detection
+    emotion_result = emotion_pipe(message)[0]
+    emotion_response = f"Detected emotion: {emotion_result['label']} (confidence: {emotion_result['score']:.2f})"
+
     mydb = mysql.connector.connect(
         host=os.environ["DB_HOST"],
         user=os.environ["DB_USER"],
@@ -30,11 +37,13 @@ def process_query(message, history):
         # Convert DataFrame responses to markdown tables
         if isinstance(response, pd.DataFrame):
             response = response.to_markdown()
-            
-        return str(response)
+        
+        # Combine emotion detection with original response
+        full_response = f"{emotion_response}\n\n{response}"
+        return str(full_response)
         
     except Exception as e:
-        return f"Error: {str(e)}"
+        return f"{emotion_response}\n\nError: {str(e)}"
     finally:
         mydb.close()
 
@@ -44,7 +53,6 @@ def handle_submit(audio, text, history):
         query = speech_pipe(audio)["text"]
     
     response = process_query(query, history)
-    # Append as (user input, bot response) tuple
     history.append((query, response))
     return "", history, history
 
@@ -59,19 +67,9 @@ with gr.Blocks() as demo:
             submit_btn = gr.Button("Submit")
             cancel_btn = gr.Button("Cancel")
         
-        chat_output = gr.Chatbot(label="Conversation History")
+            chat_output = gr.Chatbot(label="Conversation History")
     
-    # State to maintain conversation history
     history_state = gr.State([])
-    
-    def handle_submit(audio, text, history):
-        query = text
-        if audio is not None:
-            query = speech_pipe(audio)["text"]
-        
-        response = process_query(query, history)
-        history.append((query, response))
-        return "", history, history
     
     submit_btn.click(
         handle_submit,
