@@ -1,0 +1,7 @@
+gradio
+openai
+python-dotenv
+mysql-connector-python
+pandas
+transformers
+torch
