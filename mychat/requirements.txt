@@ -6,3 +6,4 @@ mysql-connector-python
 torch
 tabulate
 langchain_openai
+python-dotenv

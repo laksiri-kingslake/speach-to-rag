@@ -6,11 +6,15 @@ import os
 from transformers import pipeline
 import mysql.connector
 
+# Load environment variables
+from dotenv import load_dotenv
+
 # Initialize components
 llm = ChatGroq(model_name="llama3-70b-8192", api_key=os.environ["GROQ_API_KEY"])
 speech_pipe = pipeline("automatic-speech-recognition", "openai/whisper-base")
 
 def process_query(message, history):
+    load_dotenv()
     if isinstance(message, dict):  # Audio input
         audio_path = message["mic"]
         message = speech_pipe(audio_path)["text"]

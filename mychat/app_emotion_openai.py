@@ -61,7 +61,7 @@ def handle_submit(audio, text, history):
     return "", history, history
 
 with gr.Blocks() as demo:
-    gr.Markdown("# KingslakeBlue AI Assistant")
+    gr.Markdown("# KingslakeBlue Support AI Assistant")
     gr.Markdown("## Ask me anything about employee skills!")
     
     with gr.Row():
