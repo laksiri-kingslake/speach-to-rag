@@ -17,8 +17,9 @@ DB_USER = os.getenv("DB_USER")
 DB_PASSWORD = os.getenv("DB_PASSWORD")
 
 # Initialize OpenAI client
+client = None
 if OPENAI_API_KEY:
-    openai.api_key = OPENAI_API_KEY
+    client = openai.OpenAI(api_key=OPENAI_API_KEY)
 else:
     print("Warning: OPENAI_API_KEY not found. NL-to-SQL functionality will be disabled.")
 
@@ -67,7 +68,7 @@ def get_db_connection():
 
 def generate_sql_from_text(user_query):
     """Uses OpenAI GPT-3.5 to convert a natural language query into a SQL query."""
-    if not openai.api_key:
+    if not client:
         return None, "OpenAI API key is not configured."
 
     prompt = f"""
@@ -81,7 +82,7 @@ def generate_sql_from_text(user_query):
     SQL Query:
     """
     try:
-        response = openai.ChatCompletion.create(
+        response = client.chat.completions.create(
             model="gpt-3.5-turbo",
             messages=[
                 {"role": "system", "content": "You are a helpful assistant that converts natural language questions into SQL queries."},
@@ -89,7 +90,7 @@ def generate_sql_from_text(user_query):
             ],
             temperature=0.0
         )
-        sql_query = response.choices[0].message['content'].strip()
+        sql_query = response.choices[0].message.content.strip()
         return sql_query, None
     except Exception as e:
         return None, f"Error generating SQL: {e}"
@@ -128,42 +129,48 @@ def handle_chat_submission(user_message, history):
     sql_query, error = generate_sql_from_text(user_message)
     if error:
         history[-1][1] = f"Error: {error}"
-        return history, None, None, gr.update(visible=False), gr.update(visible=False)
+        return history, gr.update(visible=False), gr.update(visible=False)
 
     # 2. Execute the SQL query
     result_df, error = execute_sql_query(sql_query)
     if error:
         history[-1][1] = f"Error: {error}"
-        return history, None, None, gr.update(visible=False), gr.update(visible=False)
+        return history, gr.update(visible=False), gr.update(visible=False)
 
     # 3. Determine the output format (table, chart, or text)
-    if "chart" in user_message.lower():
+    if "chart" in user_message.lower() and result_df is not None and not result_df.empty:
         # Generate a bar chart
         try:
             # Heuristic to find good columns for a bar chart
-            x_col = result_df.columns[1] # Often a name or category
-            y_col = result_df.columns[-1] # Often a numeric value
-            plot = gr.BarPlot(result_df, x=x_col, y=y_col, title=f"Chart for: {user_message}")
+            x_col = result_df.columns[1]  # Often a name or category
+            y_col = result_df.columns[-1]  # Often a numeric value
             history[-1][1] = "Here is the chart you requested:"
-            return history, None, plot, gr.update(visible=False), gr.update(visible=True)
+            # Return a new BarPlot object to update the UI
+            return history, gr.update(visible=False), gr.BarPlot(
+                value=result_df,
+                x=x_col,
+                y=y_col,
+                title=f"Chart for: {user_message}",
+                visible=True
+            )
         except Exception as e:
             history[-1][1] = f"Could not generate a chart. Displaying data as a table instead. Error: {e}"
-            return history, result_df, None, gr.update(visible=True), gr.update(visible=False)
+            return history, gr.update(value=result_df, visible=True), gr.update(visible=False)
 
     elif result_df is not None and not result_df.empty:
         # Display results in a table
         history[-1][1] = "Here is the data you requested:"
-        return history, result_df, None, gr.update(visible=True), gr.update(visible=False)
+        return history, gr.update(value=result_df, visible=True), gr.update(visible=False)
     
     else:
         # Handle cases with no data or other issues
         history[-1][1] = "I couldn't retrieve any data for that query. Please try rephrasing your question."
-        return history, None, None, gr.update(visible=False), gr.update(visible=False)
+        return history, gr.update(visible=False), gr.update(visible=False)
 
 
 def clear_inputs():
     """Clears all input and output fields."""
-    return "", None, None, None, gr.update(visible=False), gr.update(visible=False)
+    return "", None, [], gr.update(visible=False), gr.update(visible=False)
 
 # --- Gradio UI ---
 
@@ -176,7 +183,7 @@ with gr.Blocks(theme=gr.themes.Soft(), title="KingslakeBlue Assistant") as app:
     with gr.Row():
         with gr.Column(scale=2):
             data_output = gr.DataFrame(label="Query Results", visible=False)
-            plot_output = gr.Plot(label="Chart Results", visible=False)
+            plot_output = gr.BarPlot(label="Chart Results", visible=False)
         with gr.Column(scale=1):
             pass # Spacer
 
@@ -203,19 +210,19 @@ with gr.Blocks(theme=gr.themes.Soft(), title="KingslakeBlue Assistant") as app:
     send_button.click(
         fn=handle_chat_submission,
         inputs=[text_input, chatbot],
-        outputs=[chatbot, data_output, plot_output, data_output, plot_output]
+        outputs=[chatbot, data_output, plot_output]
     )
     text_input.submit(
         fn=handle_chat_submission,
         inputs=[text_input, chatbot],
-        outputs=[chatbot, data_output, plot_output, data_output, plot_output]
+        outputs=[chatbot, data_output, plot_output]
     )
 
     # When the clear button is clicked
     clear_button.click(
         fn=clear_inputs,
         inputs=[],
-        outputs=[text_input, audio_input, chatbot, data_output, plot_output, data_output]
+        outputs=[text_input, audio_input, chatbot, data_output, plot_output]
     )
 
 if __name__ == "__main__":
