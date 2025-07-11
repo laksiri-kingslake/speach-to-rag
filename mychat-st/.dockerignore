@@ -1,0 +1,7 @@
+vend/
+app_groq.py
+app_openai.py
+install_guide.md
+pandasai.log
+exports/
+cache/

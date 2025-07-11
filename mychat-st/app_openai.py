@@ -322,93 +322,100 @@ with gr.Blocks(css=custom_css, theme=gr.themes.Soft()) as demo:
     with gr.Row():
         gr.HTML("""
         <div class="main-header">
-            <h1>KingslakeBlue AI Assistant</h1>
-            <!--<p>Your intelligent companion for employee skills insights</p>
-            <div style="margin-top: 1rem;">
-                <span class="status-indicator"></span>
-                <span style="font-size: 0.9rem; opacity: 0.8;">AI Ready</span>
-            </div>-->
+            <h1>KingslakeBlue Assistant</h1>
         </div>
         """)
     
     # Feature highlights
-    with gr.Row():
-        gr.HTML("""
-        <div class="feature-grid">
-            <div class="feature-card">
-                <h4>🎤 Voice Input</h4>
-                <!--<p>Speak naturally to ask questions</p>-->
-            </div>
-            <div class="feature-card">
-                <h4>📊 Data Analysis</h4>
-                <!--<p>Get insights from employee skills data</p>-->
-            </div>
-            <div class="feature-card">
-                <h4>💬 Smart Chat</h4>
-                <!--<p>Natural conversation with AI</p>-->
-            </div>
-            <div class="feature-card">
-                <h4>⚡ Real-time</h4>
-                <!--<p>Instant responses and updates</p>-->
-            </div>
-        </div>
-        """)
+    # with gr.Row():
+    #     gr.HTML("""
+    #     <div class="feature-grid">
+    #         <div class="feature-card">
+    #             <h4>🎤 Voice Input</h4>
+    #         </div>
+    #         <div class="feature-card">
+    #             <h4>📊 Data Analysis</h4>
+    #         </div>
+    #         <div class="feature-card">
+    #             <h4>💬 Smart Chat</h4>
+    #         </div>
+    #         <div class="feature-card">
+    #             <h4>⚡ Real-time</h4>
+    #         </div>
+    #     </div>
+    #     """)
     
     # Main content area
     with gr.Row():
-        with gr.Column(scale=1):
-            # Input section
-            with gr.Group(elem_classes="input-section"):
-                gr.Markdown("### 🎤 **Voice Input**")
-                audio_input = gr.Audio(
-                    sources="microphone", 
-                    type="filepath", 
-                    label="Click to record your question",
-                    elem_classes="audio-input"
-                )
-                
-                gr.Markdown("### ✍️ **Text Input**")
-                text_input = gr.Textbox(
-                    label="Or type your question here",
-                    placeholder="Ask me anything about employee skills...",
-                    lines=3,
-                    elem_classes="text-input"
-                )
-                
-                with gr.Row():
-                    submit_btn = gr.Button(
-                        "🚀 Send Message", 
-                        variant="primary",
-                        elem_classes="submit-btn"
-                    )
-                    clear_btn = gr.Button(
-                        "🗑️ Clear Chat",
-                        elem_classes="clear-btn"
-                    )
-        
-        with gr.Column(scale=2):
-            # Chat section
-            with gr.Group(elem_classes="chat-container"):
-                gr.Markdown("### 💬 **Conversation History**")
-                chat_output = gr.Chatbot(
-                    label="",
-                    height=500,
-                    elem_classes="chatbot"
-                )
+        with gr.Group(elem_classes="chat-container"):
+            gr.Markdown("### 💬 **Conversation History**")
+            chat_output = gr.Chatbot(
+                label="",
+                height=360,
+                elem_classes="chatbot"
+            )
     
+    with gr.Row():
+        with gr.Group(elem_classes="input-section"):
+            gr.Markdown("### ✍️ **Ask your question**")
+            with gr.Row():
+                with gr.Column(scale=1):
+                    mic_input = gr.Audio(
+                        sources="microphone",
+                        type="filepath",
+                        label=None,
+                        elem_id="mic-btn",
+                        elem_classes="audio-input",
+                        show_label=False
+                    )
+                with gr.Column(scale=3):
+                    text_input = gr.Textbox(
+                        label="Type or speak your question here",
+                        placeholder="Ask me anything about employee skills...",
+                        lines=3,
+                        elem_classes="text-input",
+                        show_label=False,
+                        scale=8
+                    )
+                with gr.Column(scale=1):
+                    with gr.Row():
+                        submit_btn = gr.Button(
+                            "Send Message",
+                            variant="primary",
+                            elem_classes="submit-btn"
+                        )
+                    with gr.Row():
+                        clear_btn = gr.Button(
+                            "Clear Chat",
+                            elem_classes="clear-btn"
+                        )
+        
     # State to maintain conversation history
     history_state = gr.State([])
-    
+
+    # When audio is recorded, transcribe and insert into textbox
+    def transcribe_audio(audio, text):
+        if audio is not None:
+            transcribed = speech_pipe(audio)["text"]
+            return transcribed
+        return text
+
+    mic_input.change(
+        transcribe_audio,
+        inputs=[mic_input, text_input],
+        outputs=[text_input]
+    )
+
     # Event handlers
     submit_btn.click(
         handle_submit,
-        inputs=[audio_input, text_input, history_state],
+        inputs=[mic_input, text_input, history_state],
         outputs=[text_input, chat_output, history_state]
     )
     
     text_input.submit(
         handle_submit,
-        inputs=[audio_input, text_input, history_state],
+        inputs=[mic_input, text_input, history_state],
         outputs=[text_input, chat_output, history_state]
     )
     
@@ -416,13 +423,6 @@ with gr.Blocks(css=custom_css, theme=gr.themes.Soft()) as demo:
         clear_chat,
         inputs=[history_state],
         outputs=[history_state]
-    )
-    
-    # Audio input event
-    audio_input.change(
-        handle_submit,
-        inputs=[audio_input, text_input, history_state],
-        outputs=[text_input, chat_output, history_state]
     )
 
 # Launch the app

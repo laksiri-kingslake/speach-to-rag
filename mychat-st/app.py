@@ -99,33 +99,30 @@ def process_query(message, history):
     finally:
         mydb.close()
 
-def handle_submit(audio, text, history):
-    """Handle form submission with audio or text input, supporting images in chat."""
+def handle_submit(audio, text, history, chart_paths):
     query = text.strip()
     if audio is not None:
         query = speech_pipe(audio)["text"]
-    
     if not query:
-        return "", history, history
-    
+        return "", history, history, chart_paths, chart_paths
     response = process_query(query, history)
-    # Append as (user input, bot response) tuple
+    new_chart_paths = list(chart_paths) if chart_paths else []
     if isinstance(response, dict) and response.get("type") == "image":
-        # For chart responses, add diagnostic info if available
         diagnostic = response.get("diagnostic", "")
+        # Insert latest chart at the beginning (latest on top)
+        new_chart_paths = [response["path"]] + [p for p in new_chart_paths if p != response["path"]]
         if diagnostic:
-            # Add diagnostic info as a separate message
-            history.append((query, (None, response["path"])))  # (user, (None, image_path))
-            history.append(("", diagnostic))  # Add diagnostic info
+            history.append((query, (None, response["path"])))
+            history.append(("", diagnostic))
         else:
             history.append((query, (None, response["path"])))
-        return "", history, history
+        return "", history, history, new_chart_paths, new_chart_paths
     elif isinstance(response, dict) and response.get("type") == "text":
         history.append((query, response["content"]))
-        return "", history, history
+        return "", history, history, new_chart_paths, new_chart_paths
     else:
         history.append((query, str(response)))
-        return "", history, history
+        return "", history, history, new_chart_paths, new_chart_paths
 
 def clear_chat(history):
     """Clear the chat history"""
@@ -389,9 +386,22 @@ with gr.Blocks(css=custom_css, theme=gr.themes.Soft()) as demo:
                             "Clear Chat",
                             elem_classes="clear-btn"
                         )
-        
-    # State to maintain conversation history
+
+    # Gallery for all charts from the session (latest on top)
+    with gr.Row():
+        gr.Markdown("### 📊 **Charts from this Session**")
+        chart_gallery = gr.Gallery(
+            label="Charts",
+            show_label=False,
+            elem_id="chart-gallery",
+            height="auto",
+            columns=[3],
+            object_fit="contain"
+        )
+
+    # State to maintain conversation history and chart paths
     history_state = gr.State([])
+    chart_paths_state = gr.State([])
 
     # When audio is recorded, transcribe and insert into textbox
     def transcribe_audio(audio, text):
@@ -406,30 +416,30 @@ with gr.Blocks(css=custom_css, theme=gr.themes.Soft()) as demo:
         outputs=[text_input]
     )
 
-    # Event handlers
+    # Modified handle_submit to update chart gallery
     submit_btn.click(
         handle_submit,
-        inputs=[mic_input, text_input, history_state],
-        outputs=[text_input, chat_output, history_state]
+        inputs=[mic_input, text_input, history_state, chart_paths_state],
+        outputs=[text_input, chat_output, history_state, chart_gallery, chart_paths_state]
     )
     
     text_input.submit(
         handle_submit,
-        inputs=[mic_input, text_input, history_state],
-        outputs=[text_input, chat_output, history_state]
+        inputs=[mic_input, text_input, history_state, chart_paths_state],
+        outputs=[text_input, chat_output, history_state, chart_gallery, chart_paths_state]
     )
     
     clear_btn.click(
-        clear_chat,
-        inputs=[history_state],
-        outputs=[history_state]
+        lambda history, chart_paths: ([], []),
+        inputs=[history_state, chart_paths_state],
+        outputs=[history_state, chart_gallery, chart_paths_state]
     )
 
 # Launch the app
 if __name__ == "__main__":
     demo.launch(
-        server_name="0.0.0.0",
-        server_port=7860,
+        server_name=os.getenv("GRADIO_SERVER_NAME", "0.0.0.0"),
+        server_port=int(os.getenv("GRADIO_SERVER_PORT", 7860)),
         share=False,
         show_error=True
     ) 
